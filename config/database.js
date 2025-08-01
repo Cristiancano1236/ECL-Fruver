@@ -1,15 +1,16 @@
 const mysql = require('mysql2');
 
-const connection = mysql.createConnection({
-    host: 'localhost',
-    user: 'root',
-    password: '111',
-    database: 'sistema_facturacion'
+const pool = mysql.createPool({
+    host: process.env.DB_HOST || 'localhost',
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASSWORD || '111',
+    database: process.env.DB_NAME || 'reconocimiento',
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0
 });
 
-connection.connect(error => {
-    if (error) throw error;
-    console.log('Conexión exitosa a la base de datos.');
-});
+// Convertir pool a promesas
+const promisePool = pool.promise();
 
-module.exports = connection; 
+module.exports = promisePool; 

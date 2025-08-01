@@ -1,5 +1,5 @@
-CREATE DATABASE IF NOT EXISTS sistema_facturacion;
-USE sistema_facturacion;
+CREATE DATABASE IF NOT EXISTS reconocimiento;
+USE reconocimiento;
 
 CREATE TABLE IF NOT EXISTS productos (
     id INT AUTO_INCREMENT PRIMARY KEY,

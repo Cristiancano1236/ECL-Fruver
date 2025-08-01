@@ -7,20 +7,25 @@
     <style>
         @media print {
             body {
-                width: 80mm;
+                width: <%= config.ancho_papel %>mm;
                 margin: 0;
-                padding: 10px;
+                padding: 5px;
+                font-size: <%= config.font_size === 2 ? '1.2em' : '1em' %>;
             }
             .no-print {
                 display: none;
+            }
+            table {
+                font-size: 0.9em;
             }
         }
 
         body {
             font-family: Arial, sans-serif;
-            max-width: 80mm;
+            max-width: <%= config.ancho_papel %>mm;
             margin: 0 auto;
-            padding: 10px;
+            padding: 5px;
+            font-size: <%= config.font_size === 2 ? '1.2em' : '1em' %>;
         }
 
         .text-center { text-align: center; }
@@ -30,16 +35,47 @@
         .divider { border-top: 1px dashed #000; margin: 10px 0; }
         .small { font-size: 0.8em; }
         
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 10px 0;
+        .producto-item {
+            margin-bottom: 8px;
+            padding-bottom: 4px;
+            border-bottom: 1px dotted #ccc;
         }
-        
-        th, td {
+
+        .producto-nombre {
+            font-size: 0.85em;
+            margin-bottom: 3px;
+            word-break: break-word;
+        }
+
+        .producto-detalles {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85em;
+            padding-left: 10px;
+        }
+
+        .producto-cantidad {
+            flex: 1;
             text-align: left;
-            padding: 3px;
+        }
+
+        .producto-precio {
+            flex: 1;
+            text-align: center;
+        }
+
+        .producto-total {
+            flex: 1;
+            text-align: right;
+        }
+
+        .total-final {
+            margin-top: 10px;
+            text-align: right;
+            font-weight: bold;
             font-size: 0.9em;
+            border-top: 1px dashed #000;
+            padding-top: 5px;
         }
 
         .print-button {
@@ -113,32 +149,30 @@
 
         <div class="divider"></div>
 
-        <table>
-            <thead>
-                <tr>
-                    <th>Producto</th>
-                    <th>Cant.</th>
-                    <th class="text-right">Precio</th>
-                    <th class="text-right">Total</th>
-                </tr>
-            </thead>
-            <tbody>
-                <% detalles.forEach(function(item) { %>
-                    <tr>
-                        <td><%= item.producto_nombre %></td>
-                        <td><%= Number(item.cantidad).toFixed(2) %><%= item.unidad_medida %></td>
-                        <td class="text-right">$<%= Number(item.precio_unitario).toFixed(2) %></td>
-                        <td class="text-right">$<%= Number(item.subtotal).toFixed(2) %></td>
-                    </tr>
-                <% }); %>
-            </tbody>
-            <tfoot>
-                <tr>
-                    <td colspan="3" class="text-right"><strong>Total:</strong></td>
-                    <td class="text-right"><strong>$<%= Number(factura.total).toFixed(2) %></strong></td>
-                </tr>
-            </tfoot>
-        </table>
+        <div class="productos-lista">
+            <% detalles.forEach(function(item) { %>
+                <div class="producto-item">
+                    <div class="producto-nombre">
+                        <%= item.producto_nombre %>
+                    </div>
+                    <div class="producto-detalles">
+                        <div class="producto-cantidad">
+                            <%= Number(item.cantidad).toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) %><%= item.unidad_medida %>
+                        </div>
+                        <div class="producto-precio">
+                            $<%= Number(item.precio_unitario).toLocaleString('es-CO') %>
+                        </div>
+                        <div class="producto-total">
+                            $<%= Number(item.subtotal).toLocaleString('es-CO') %>
+                        </div>
+                    </div>
+                </div>
+            <% }); %>
+            
+            <div class="total-final">
+                Total: $<%= Number(factura.total).toLocaleString('es-CO') %>
+            </div>
+        </div>
 
         <div class="divider"></div>
 

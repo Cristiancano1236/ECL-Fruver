@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../config/database');
+const db = require('../db');
 const multer = require('multer');
 
 // Configuración de multer para memoria
@@ -14,31 +14,66 @@ const upload = multer({
     }
 });
 
-// Obtener configuración actual
-router.get('/', (req, res) => {
-    db.query('SELECT *, TO_BASE64(logo_data) as logo_base64, TO_BASE64(qr_data) as qr_base64 FROM configuracion_impresion LIMIT 1', (err, results) => {
-        if (err) {
-            console.error('Error al obtener configuración:', err);
-            return res.status(500).json({ error: 'Error al obtener configuración' });
-        }
+// Función para verificar y crear configuración inicial
+async function verificarConfiguracion() {
+    try {
+        const [config] = await db.query('SELECT * FROM configuracion_impresion LIMIT 1');
         
-        const config = results[0] || {};
-        if (config.logo_base64) {
-            config.logo_src = `data:image/${config.logo_tipo};base64,${config.logo_base64}`;
+        if (!config || config.length === 0) {
+            // Crear configuración inicial
+            await db.query(`
+                INSERT INTO configuracion_impresion 
+                (nombre_negocio, direccion, telefono, pie_pagina) 
+                VALUES 
+                ('Mi Negocio', 'Dirección del Negocio', 'Teléfono', '¡Gracias por su compra!')
+            `);
+            console.log('Configuración inicial creada');
         }
-        if (config.qr_base64) {
-            config.qr_src = `data:image/${config.qr_tipo};base64,${config.qr_base64}`;
-        }
+    } catch (error) {
+        console.error('Error al verificar configuración:', error);
+    }
+}
+
+// Verificar configuración al iniciar
+verificarConfiguracion();
+
+// Obtener configuración
+router.get('/', async (req, res) => {
+    try {
+        const [config] = await db.query('SELECT * FROM configuracion_impresion LIMIT 1');
         
-        res.render('configuracion', { config });
-    });
+        if (!config || config.length === 0) {
+            // Si no hay configuración, renderizar la vista con valores por defecto
+            return res.render('configuracion', { 
+                config: {
+                    nombre_negocio: '',
+                    direccion: '',
+                    telefono: '',
+                    nit: '',
+                    pie_pagina: '',
+                    ancho_papel: 80,
+                    font_size: 1
+                }
+            });
+        }
+
+        // No enviar los datos binarios de las imágenes a la vista
+        const configSinImagenes = { ...config[0] };
+        delete configSinImagenes.logo_data;
+        delete configSinImagenes.qr_data;
+
+        res.render('configuracion', { config: configSinImagenes });
+    } catch (error) {
+        console.error('Error al obtener configuración:', error);
+        res.status(500).json({ error: 'Error al obtener configuración' });
+    }
 });
 
 // Guardar configuración
 router.post('/', upload.fields([
     { name: 'logo', maxCount: 1 },
     { name: 'qr', maxCount: 1 }
-]), (req, res) => {
+]), async (req, res) => {
     try {
         const {
             nombre_negocio,
@@ -50,72 +85,57 @@ router.post('/', upload.fields([
             font_size
         } = req.body;
 
-        db.query('SELECT * FROM configuracion_impresion LIMIT 1', (err, results) => {
-            if (err) {
-                console.error('Error al verificar configuración:', err);
-                return res.status(500).json({ error: 'Error al guardar configuración' });
-            }
+        const [results] = await db.query('SELECT * FROM configuracion_impresion LIMIT 1');
 
-            let values = [
-                nombre_negocio,
-                direccion || null,
-                telefono || null,
-                nit || null,
-                pie_pagina || null,
-                ancho_papel || 80,
-                font_size || 1
-            ];
+        let values = [
+            nombre_negocio,
+            direccion || null,
+            telefono || null,
+            nit || null,
+            pie_pagina || null,
+            ancho_papel || 80,
+            font_size || 1
+        ];
 
-            // Agregar datos de imágenes si se subieron nuevas
-            if (req.files?.logo) {
-                values.push(req.files.logo[0].buffer);
-                values.push(req.files.logo[0].mimetype.split('/')[1]);
-            }
-            if (req.files?.qr) {
-                values.push(req.files.qr[0].buffer);
-                values.push(req.files.qr[0].mimetype.split('/')[1]);
-            }
+        // Agregar datos de imágenes si se subieron nuevas
+        if (req.files?.logo) {
+            values.push(req.files.logo[0].buffer);
+            values.push(req.files.logo[0].mimetype.split('/')[1]);
+        }
+        if (req.files?.qr) {
+            values.push(req.files.qr[0].buffer);
+            values.push(req.files.qr[0].mimetype.split('/')[1]);
+        }
 
-            if (results.length === 0) {
-                // Insertar nueva configuración
-                let sql = `
-                    INSERT INTO configuracion_impresion 
-                    (nombre_negocio, direccion, telefono, nit, pie_pagina, 
-                     ancho_papel, font_size
-                `;
-                if (req.files?.logo) sql += ', logo_data, logo_tipo';
-                if (req.files?.qr) sql += ', qr_data, qr_tipo';
-                sql += ') VALUES (' + values.map(() => '?').join(',') + ')';
-                
-                db.query(sql, values, (err) => {
-                    if (err) {
-                        console.error('Error al crear configuración:', err);
-                        return res.status(500).json({ error: 'Error al guardar configuración' });
-                    }
-                    res.redirect('/configuracion');
-                });
-            } else {
-                // Actualizar configuración existente
-                let sql = `
-                    UPDATE configuracion_impresion 
-                    SET nombre_negocio = ?, direccion = ?, telefono = ?, nit = ?,
-                        pie_pagina = ?, ancho_papel = ?, font_size = ?
-                `;
-                if (req.files?.logo) sql += ', logo_data = ?, logo_tipo = ?';
-                if (req.files?.qr) sql += ', qr_data = ?, qr_tipo = ?';
-                sql += ' WHERE id = ?';
-                
-                values.push(results[0].id);
-                
-                db.query(sql, values, (err) => {
-                    if (err) {
-                        console.error('Error al actualizar configuración:', err);
-                        return res.status(500).json({ error: 'Error al guardar configuración' });
-                    }
-                    res.redirect('/configuracion');
-                });
-            }
-        });
+        if (!results || results.length === 0) {
+            // Insertar nueva configuración
+            let sql = `
+                INSERT INTO configuracion_impresion 
+                (nombre_negocio, direccion, telefono, nit, pie_pagina, 
+                 ancho_papel, font_size
+            `;
+            if (req.files?.logo) sql += ', logo_data, logo_tipo';
+            if (req.files?.qr) sql += ', qr_data, qr_tipo';
+            sql += ') VALUES (' + values.map(() => '?').join(',') + ')';
+            
+            await db.query(sql, values);
+        } else {
+            // Actualizar configuración existente
+            let sql = `
+                UPDATE configuracion_impresion 
+                SET nombre_negocio = ?, direccion = ?, telefono = ?, nit = ?,
+                    pie_pagina = ?, ancho_papel = ?, font_size = ?
+            `;
+            if (req.files?.logo) sql += ', logo_data = ?, logo_tipo = ?';
+            if (req.files?.qr) sql += ', qr_data = ?, qr_tipo = ?';
+            sql += ' WHERE id = ?';
+            
+            values.push(results[0].id);
+            
+            await db.query(sql, values);
+        }
+
+        res.redirect('/configuracion');
     } catch (error) {
         console.error('Error en el procesamiento:', error);
         res.status(500).json({ error: 'Error interno del servidor' });

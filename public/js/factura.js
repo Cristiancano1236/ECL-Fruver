@@ -91,7 +91,7 @@ $(document).ready(function() {
 
     // Función para mostrar lista de clientes
     function mostrarListaClientes(clientes) {
-        const lista = $('<div class="list-group position-absolute w-100 mt-1 shadow-sm">').css('z-index', 1000);
+        const lista = $('<div class="list-group search-results">');
         clientes.forEach(cliente => {
             lista.append(
                 $('<a href="#" class="list-group-item list-group-item-action">')
@@ -103,12 +103,12 @@ $(document).ready(function() {
                     })
             );
         });
-        $('#cliente').parent().append(lista);
+        $('#cliente').closest('.search-container').append(lista);
     }
 
     // Función para mostrar lista de productos
     function mostrarListaProductos(productos) {
-        const lista = $('<div class="list-group position-absolute w-100 mt-1 shadow-sm">').css('z-index', 1000);
+        const lista = $('<div class="list-group search-results">');
         productos.forEach(producto => {
             lista.append(
                 $('<a href="#" class="list-group-item list-group-item-action">')
@@ -125,7 +125,7 @@ $(document).ready(function() {
                     })
             );
         });
-        $('#producto').parent().append(lista);
+        $('#producto').closest('.search-container').append(lista);
     }
 
     // Cerrar listas al hacer clic fuera
@@ -207,8 +207,8 @@ $(document).ready(function() {
                     <td>${item.nombre}</td>
                     <td>${item.cantidad}</td>
                     <td>${item.unidad}</td>
-                    <td class="text-end">$${item.precio.toFixed(2)}</td>
-                    <td class="text-end">$${item.subtotal.toFixed(2)}</td>
+                    <td class="text-end">$${item.precio.toLocaleString('es-CO')}</td>
+                    <td class="text-end">$${item.subtotal.toLocaleString('es-CO')}</td>
                     <td class="text-center">
                         <button class="btn btn-danger btn-sm" onclick="eliminarProducto(${index})">
                             <i class="bi bi-trash"></i>
@@ -218,7 +218,7 @@ $(document).ready(function() {
             `);
         });
 
-        $('#totalFactura').text(totalFactura.toFixed(2));
+        $('#totalFactura').text(totalFactura.toLocaleString('es-CO'));
     }
 
     // Función para eliminar producto
@@ -233,7 +233,7 @@ $(document).ready(function() {
         $('#producto_id').val('');
         $('#cantidad').val('');
         $('#precio').val('');
-        $('#unidadMedida').val('KG');
+        $('#unidadMedida').val('UND');
         productoSeleccionado = null;
     }
 
@@ -361,40 +361,39 @@ $(document).ready(function() {
         const cliente_id = $('#cliente_id').val();
         const forma_pago = $('#formaPago').val();
         
-        console.log('Estado actual antes de generar factura:', {
-            cliente_id,
-            forma_pago,
-            productos: productosFactura,
-            total: totalFactura
-        });
-
-        // Verificar el ID del pedido antes de generar la factura
-        console.log('=== VERIFICACIÓN DE PEDIDO ACTUAL ===');
-        const pedidoIdAntes = localStorage.getItem('pedidoActualId');
-        console.log('ID del pedido en localStorage ANTES de generar factura:', pedidoIdAntes);
-        console.log('Tipo de dato del ID:', typeof pedidoIdAntes);
-        console.log('Pedidos guardados ANTES de generar factura:', pedidosGuardados);
-        
         if (!cliente_id) {
-            console.log('Error: No hay cliente seleccionado');
             mostrarAlerta('warning', 'Por favor seleccione un cliente');
             return;
         }
 
         if (productosFactura.length === 0) {
-            console.log('Error: No hay productos en la factura');
             mostrarAlerta('warning', 'Agregue al menos un producto a la factura');
             return;
         }
 
         const factura = {
-            cliente_id,
+            cliente_id: cliente_id,
             total: totalFactura,
-            forma_pago,
-            productos: productosFactura
+            forma_pago: forma_pago,
+            productos: productosFactura.map(p => ({
+                producto_id: p.producto_id,
+                cantidad: p.cantidad,
+                precio: p.precio,
+                unidad: p.unidad,
+                subtotal: p.subtotal
+            }))
         };
 
         console.log('Factura a enviar:', factura);
+
+        // Mostrar indicador de carga
+        Swal.fire({
+            title: 'Generando factura...',
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
 
         $.ajax({
             url: '/api/facturas',
@@ -402,56 +401,57 @@ $(document).ready(function() {
             data: JSON.stringify(factura),
             contentType: 'application/json',
             success: function(response) {
+                Swal.close();
                 console.log('Factura generada exitosamente:', response);
                 
-                // Eliminar el pedido de localStorage si existe
-                console.log('=== PROCESO DE ELIMINACIÓN DE PEDIDO ===');
-                const pedidoId = localStorage.getItem('pedidoActualId');
-                console.log('ID del pedido en localStorage:', pedidoId);
-                console.log('Tipo de dato del ID recuperado:', typeof pedidoId);
-                
-                if (pedidoId) {
-                    console.log('Se encontró un ID de pedido para eliminar');
-                    console.log('Pedidos guardados antes de eliminar:', pedidosGuardados);
-                    console.log('Cantidad de pedidos antes:', pedidosGuardados.length);
-                    
-                    pedidosGuardados = pedidosGuardados.filter(p => {
-                        console.log('Comparando pedido:');
-                        console.log('ID del pedido en lista:', p.id, 'tipo:', typeof p.id);
-                        console.log('ID a eliminar:', pedidoId, 'tipo:', typeof pedidoId);
-                        const mantener = p.id != pedidoId;
-                        console.log('¿Se mantiene este pedido?:', mantener);
-                        return mantener;
-                    });
-                    
-                    console.log('Pedidos guardados después de eliminar:', pedidosGuardados);
-                    console.log('Cantidad de pedidos después:', pedidosGuardados.length);
-                    
+                if (response && response.id) {
+                    // Eliminar el pedido de localStorage si existe
+                    const pedidoId = localStorage.getItem('pedidoActualId');
+                    if (pedidoId) {
+                        pedidosGuardados = pedidosGuardados.filter(p => p.id != pedidoId);
                         actualizarLocalStorage();
-                    console.log('LocalStorage actualizado');
-                    console.log('Verificación después de actualizar:', JSON.parse(localStorage.getItem('pedidos')));
-                    
-                    localStorage.removeItem('pedidoActualId');
-                    console.log('ID del pedido eliminado del localStorage');
-                    console.log('Verificación de eliminación:', localStorage.getItem('pedidoActualId'));
+                        localStorage.removeItem('pedidoActualId');
+                    }
+
+                    // Mostrar la factura
+                    const facturaModal = new bootstrap.Modal(document.getElementById('facturaModal'));
+                    const iframeUrl = `/api/facturas/${response.id}/imprimir`;
+                    console.log('URL del iframe:', iframeUrl);
+                    $('#facturaFrame').attr('src', iframeUrl);
+                    facturaModal.show();
+
+                    // Limpiar el formulario
+                    limpiarFormulario();
+                    mostrarAlerta('success', 'Factura generada exitosamente');
                 } else {
-                    console.log('No se encontró ID de pedido para eliminar');
+                    mostrarAlerta('error', 'Error: No se recibió el ID de la factura');
                 }
-
-                // Mostrar la factura en el mismo modal
-                const facturaModal = new bootstrap.Modal(document.getElementById('facturaModal'));
-                $('#facturaFrame').attr('src', `/facturas/${response.id}/imprimir`);
-                facturaModal.show();
-
-                // Limpiar el formulario
-                limpiarFormulario();
-                mostrarAlerta('success', 'Factura generada exitosamente');
-                console.log('=== FIN GENERACIÓN DE FACTURA ===');
             },
-            error: function(xhr) {
-                console.error('Error al generar factura:', xhr.responseText);
-                const error = xhr.responseJSON?.error || 'Error al generar la factura';
-                mostrarAlerta('error', error);
+            error: function(xhr, status, error) {
+                Swal.close();
+                console.error('Error al generar factura:', {
+                    status: xhr.status,
+                    statusText: xhr.statusText,
+                    responseText: xhr.responseText,
+                    error: error
+                });
+
+                let mensajeError = 'Error al generar la factura';
+                if (xhr.status === 0) {
+                    mensajeError = 'No se pudo conectar con el servidor. Por favor, verifica tu conexión.';
+                } else {
+                    try {
+                        const respuesta = JSON.parse(xhr.responseText);
+                        mensajeError = respuesta.error || mensajeError;
+                    } catch (e) {
+                        console.error('Error al parsear respuesta:', e);
+                        if (xhr.responseText) {
+                            mensajeError = xhr.responseText;
+                        }
+                    }
+                }
+                
+                mostrarAlerta('error', mensajeError);
             }
         });
     });
@@ -487,7 +487,7 @@ $(document).ready(function() {
                         </small>
                     </td>
                     <td><small>${productosResumen}</small></td>
-                    <td>$${pedido.total.toFixed(2)}</td>
+                    <td>$${pedido.total.toLocaleString('es-CO')}</td>
                     <td>
                         <div class="btn-group btn-group-sm">
                             <button class="btn btn-primary" onclick="cargarPedido(${index})" title="Cargar pedido">

@@ -51,4 +51,4 @@ npm start
 - Soporte para logo y QR de pagos
 
 ## Soporte
-Para soporte o preguntas, contactar a: [tu_correo@ejemplo.com] 
+Para soporte o preguntas, ingresa a https://ciscodedev.netlify.app/

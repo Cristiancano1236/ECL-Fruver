@@ -1,0 +1,6 @@
+node_modules/
+.env
+*.pem
+dist/
+*.zip
+Comandos.txt
